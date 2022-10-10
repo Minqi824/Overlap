@@ -9,12 +9,6 @@
 - inverse loss
 - minus loss
 - score distribution loss (i.e., minimize the overlapped area)
-
-
-To do:
-- 试一下所有数据集的embedding比较?
-- 用synthetic data试一下
-- 更多的loss
 '''
 
 import copy
@@ -207,8 +201,8 @@ class Comparison():
             # the top 1% of the likelihood score are the anomalies
             y[np.argsort(l_scores)[:int(self.anomaly_ratio * len(y))]] = 1
 
-            # the likelihood is treated as the ground-truth anomaly score
-            y = np.concatenate((y.reshape(-1, 1), l_scores.reshape(-1, 1)), axis=1)
+            # # the likelihood is treated as the ground-truth anomaly score
+            # y = np.concatenate((y.reshape(-1, 1), l_scores.reshape(-1, 1)), axis=1)
 
         else:
             raise NotImplementedError
@@ -511,9 +505,9 @@ class Comparison():
                 'loss':loss_epoch, 'score': score_test, 'feature': feature, 'performance': performance}
 
 
-# com = Comparison(n_pts=1000, n_dim=2, n_Gaussians=2, anomaly_ratio=0.05)
-#
+# # init
+# com = Comparison()
 # # score distribution loss
-# result_score_loss = com.fit2test(data=None, dataset=None, synthetic=True, synthetic_mode='Cluster',
+# result_score_loss = com.fit2test(data=None, dataset=None, synthetic=True, synthetic_mode='GM',
 #                                  resampling=True, loss_name='score_distribution_loss')
 # print(result_score_loss['performance'])

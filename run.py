@@ -11,12 +11,9 @@ from keras import backend as K
 from data_generator import DataGenerator
 from myutils import Utils
 
-# from baseline.SGAE.sgae_train import sgae
-# from baseline.A3.run import A_3
-
 class RunPipeline():
     def __init__(self, suffix:str=None, generate_duplicates=False, n_samples_threshold=1000,
-                 realistic_synthetic_mode=None, parallel=None, architecture=None):
+                 realistic_synthetic_mode=None, parallel=None, architecture=None, loss_name=None):
         '''
         generate_duplicates: whether to generate duplicated samples when sample size is too small
         n_samples_threshold: threshold for generating the above duplicates
@@ -35,7 +32,7 @@ class RunPipeline():
             self.suffix = suffix + '_baseline_' + parallel + '_' + 'duplicates(' + str(generate_duplicates) + ')_' + 'synthetic(' + str(realistic_synthetic_mode) + ')'
         else:
             assert architecture is not None
-            self.suffix = suffix + '_' + parallel + '_' + architecture + '_' + 'duplicates(' + str(generate_duplicates) + ')_' + 'synthetic(' + str(realistic_synthetic_mode) + ')'
+            self.suffix = suffix + '_' + parallel + '_' + architecture + '_' + loss_name + '_' + 'duplicates(' + str(generate_duplicates) + ')_' + 'synthetic(' + str(realistic_synthetic_mode) + ')'
 
         # data generator instantiation
         self.data_generator = DataGenerator(generate_duplicates=self.generate_duplicates,
@@ -48,6 +45,7 @@ class RunPipeline():
 
         self.parallel = parallel
         self.architecture = architecture
+        self.loss_name = loss_name
 
         # model dict
         self.model_dict = {}
@@ -82,30 +80,18 @@ class RunPipeline():
             self.model_dict['ResNet'] = FTTransformer
             self.model_dict['FTTransformer'] = FTTransformer
 
-        elif self.parallel == 'DualGAN':
-            from old.RCCDualGAN.run import RccDualGAN
-            self.model_dict['RCCDualGAN'] = RccDualGAN
-
         elif self.parallel == 'proposed':
             from baseline.ADSD.run import adsd
-            from old.ADSD_DeepSAD.src.run import ADSD_DeepSAD
 
-            if architecture == 'DeepSAD':
-                self.model_dict['ADSD'] = ADSD_DeepSAD
-            else:
-                self.model_dict['ADSD'] = adsd
+            self.model_dict['ADSD'] = adsd
 
         else:
             raise NotImplementedError
 
-        # SGAE是无监督模型, A3目前效果不好需要进一步调优
-        # self.model_dict['SGAE'] = sgae
-        # self.model_dict['A3'] = A_3
-
     # dataset filter for delelting those datasets that do not satisfy the experimental requirement
     def dataset_filter(self):
         # dataset list in the current folder
-        dataset_list_org = [os.path.splitext(_)[0] for _ in os.listdir(os.path.join(os.getcwd(), 'datasets', 'new'))
+        dataset_list_org = [os.path.splitext(_)[0] for _ in os.listdir(os.path.join(os.getcwd(), 'datasets'))
                             if os.path.splitext(_)[-1] != '.md']
 
         # 将不符合标准的数据集筛除
@@ -146,10 +132,10 @@ class RunPipeline():
             # model initialization, if model weights are saved, the save_suffix should be specified
             if self.model_name in ['DevNet', 'FEAWAD', 'REPEN']:
                 self.clf = self.clf(seed=self.seed, model_name=self.model_name, save_suffix=self.suffix)
-            elif self.model_name == 'ADSD' and self.architecture != 'DeepSAD':
-                self.clf = self.clf(seed=self.seed, model_name=self.model_name, architecture=self.architecture)
+            elif self.model_name == 'ADSD':
+                self.clf = self.clf(seed=self.seed, model_name=self.model_name, architecture=self.architecture, loss_name=self.loss_name)
             else:
-                self.clf = self.clf(seed=self.seed, model_name=self.model_name)
+                raise NotImplementedError
 
         except Exception as error:
             print(f'Error in model initialization. Model:{self.model_name}, Error: {error}')
@@ -157,7 +143,7 @@ class RunPipeline():
 
         try:
             # model fitting, currently most of models are implemented to output the anomaly score
-            if self.model_name not in ['ADSD', 'FS', 'SGAE', 'A3'] or self.architecture == 'DeepSAD':
+            if self.model_name not in ['ADSD', 'FS']:
                 # fitting
                 self.clf = self.clf.fit(X_train=self.data['X_train'], y_train=self.data['y_train'],
                                         ratio=sum(self.data['y_test']) / len(self.data['y_test']))
@@ -226,6 +212,6 @@ class RunPipeline():
                 df_time.to_csv(os.path.join(os.getcwd(), 'result', 'Time_' + self.suffix + '.csv'), index=True)
 
 # run the experment
-pipeline = RunPipeline(suffix='ADSD', parallel='proposed', architecture='FTTransformer',
+pipeline = RunPipeline(suffix='ADSD', parallel='proposed', architecture='VAE', loss_name='Gaussian',
                        generate_duplicates=True, n_samples_threshold=1000, realistic_synthetic_mode=None)
 pipeline.run()

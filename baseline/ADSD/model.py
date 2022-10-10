@@ -4,6 +4,7 @@ from torch import nn
 from torch.distributions.normal import Normal
 import numpy as np
 
+# ADSD based on MLP backbone
 class ADSD_MLP(nn.Module):
     def __init__(self, input_size, act_fun):
         super(ADSD_MLP, self).__init__()
@@ -26,11 +27,10 @@ class ADSD_MLP(nn.Module):
 
         return feature, score.squeeze()
 
-# improving the score distribution based anomaly detection (ADSD) by the backbone in:
-# "Feature Encoding with AutoEncoders for Weakly-supervised Anomaly Detection"
+# ADSD based on AutoEncoder backbone, from "Feature Encoding with AutoEncoders for Weakly-supervised Anomaly Detection"
 class ADSD_AE(nn.Module):
     def __init__(self, input_size, act_fun):
-        super(ADSD_AEpro, self).__init__()
+        super(ADSD_AE, self).__init__()
 
         self.encoder = nn.Sequential(
             nn.Linear(input_size, 128),
@@ -86,9 +86,10 @@ class ADSD_AE(nn.Module):
 
         return feature, score.squeeze()
 
+# ADSD based on VAE backbone,
 class ADSD_VAE(nn.Module):
     def __init__(self, input_size, act_fun):
-        super(SDAD_VAE, self).__init__()
+        super(ADSD_VAE, self).__init__()
 
         self.feature = nn.Sequential(
             nn.Linear(input_size, 100),

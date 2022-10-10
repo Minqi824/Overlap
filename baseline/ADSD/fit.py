@@ -93,6 +93,55 @@ class GaussianKDE(Distribution):  # 已经检验过与sklearn计算结果一致
 
         return log_prob
 
+def loss_overlap_Gaussian(m1_tensor, m2_tensor, s1_tensor, s2_tensor,
+                          seed, device=None, thres=1e-4):
+    assert m1_tensor.size(0) == m2_tensor.size(0) == s1_tensor.size(0) == s2_tensor.size(0)
+    utils.set_seed(seed)
+
+    # area vector
+    area = torch.empty((m1_tensor.size(0))).to(device)
+
+    idx_1 = torch.where(m1_tensor >= m2_tensor)[0]
+    if idx_1.size(0) > 0:
+        area[idx_1] = torch.tensor(1.0, requires_grad=True).to(device)
+
+    idx_2 = torch.where(torch.abs(s1_tensor - s2_tensor) <= thres)[0]
+    idx_2 = [_ for _ in idx_2 if _ not in idx_1]  # idx_1 和 idx_2可能有重复,需要去重
+    idx_2 = torch.stack(idx_2) if len(idx_2) > 0 else torch.tensor([])
+
+    if idx_2.size(0) > 0:
+        m1, m2, s1, s2 = m1_tensor[idx_2], m2_tensor[idx_2], s1_tensor[idx_2], s2_tensor[idx_2]
+        d1 = torch.distributions.normal.Normal(loc=m1, scale=s1)
+        d2 = torch.distributions.normal.Normal(loc=m2, scale=s2)
+        c = (m1 + m2) / 2.0
+        area[idx_2] = 1.0 - d1.cdf(c) + d2.cdf(c)
+
+    idx_3 = [_ for _ in torch.arange(area.size(0)) if _ not in idx_1 and _ not in idx_2]
+    idx_3 = torch.stack(idx_3) if len(idx_3) > 0 else torch.tensor([])
+    if idx_3.size(0) > 0:
+        m1, m2, s1, s2 = m1_tensor[idx_3], m2_tensor[idx_3], s1_tensor[idx_3], s2_tensor[idx_3]
+        d1 = torch.distributions.normal.Normal(loc=m1, scale=s1)
+        d2 = torch.distributions.normal.Normal(loc=m2, scale=s2)
+
+        c1 = torch.pow(
+            torch.pow(m1 - m2, 2.0) + 2.0 * (torch.pow(s1, 2.0) - torch.pow(s2, 2.0)) * torch.log(torch.div(s1, s2)),
+            0.5)
+        c1 = m1 * s2 - s1 * c1
+        c1 = m2 * torch.pow(s1, 2.0) - s2 * c1
+        c1 = torch.div(c1, torch.pow(s1, 2.0) - torch.pow(s2, 2.0))
+
+        c2 = torch.pow(
+            torch.pow(m1 - m2, 2.0) + 2.0 * (torch.pow(s1, 2.0) - torch.pow(s2, 2.0)) * torch.log(torch.div(s1, s2)),
+            0.5)
+        c2 = m1 * s2 + s1 * c2
+        c2 = m2 * torch.pow(s1, 2.0) - s2 * c2
+        c2 = torch.div(c2, torch.pow(s1, 2.0) - torch.pow(s2, 2.0))
+        area[idx_3] = 1.0 - d1.cdf(c2) + d2.cdf(c2) - d2.cdf(c1) + d1.cdf(c1)
+
+    assert idx_1.size(0) + idx_2.size(0) + idx_3.size(0) == area.size(0)
+
+    return area
+
 def loss_overlap(s_u, s_a, seed, bw_u=None, bw_a=None, x_num=1000,
                  plot=False, pro=False, device=None):
     # set seed
@@ -204,13 +253,15 @@ def evaluate(X, y=None, model=None, batch_size=None):
 
     return score, metric['aucpr']
 
-def fit(train_loader, model, architecture, optimizer, epochs,
+def fit(train_loader, model, architecture, loss_name, optimizer, epochs,
         X_val=None, y_val=None, es=False,
         print_loss=False, device=None, bw_u=None, bw_a=None, plot=False):
     '''
     bw_u: the bandwidth of unlabeled samples
     bw_a: the bandwidth of labeled anomalies
     '''
+    MarginRankingLoss = nn.MarginRankingLoss()
+
     if architecture in ['ResNet', 'FTTransformer']:
         progress = delu.ProgressTracker(patience=10)
 
@@ -227,8 +278,10 @@ def fit(train_loader, model, architecture, optimizer, epochs,
             model.zero_grad()
 
             # loss forward
-            if architecture in ['MLP', 'AEpro']:
+            if architecture in ['MLP', 'AE']:
                 _, score = model(X)
+            elif architecture == 'VAE':
+                _, mu, std, score = model(X)
             elif architecture == 'ResNet':
                 score = model(X); score = score.squeeze()
             elif architecture == 'FTTransformer':
@@ -240,8 +293,31 @@ def fit(train_loader, model, architecture, optimizer, epochs,
             score_u = score[torch.where(y == 0)[0]]
             score_a = score[torch.where(y == 1)[0]]
 
-            loss = loss_overlap(s_u=score_u, s_a=score_a, seed=utils.unique(epoch, i),
-                                bw_u=bw_u, bw_a=bw_a, pro=True, plot=plot, device=device)
+            if loss_name == 'Gaussian':
+                loss = loss_overlap_Gaussian(m1_tensor=mu[torch.where(y == 0)[0]], m2_tensor=mu[torch.where(y == 1)[0]],
+                                             s1_tensor=std[torch.where(y == 0)[0]], s2_tensor=std[torch.where(y == 1)[0]],
+                                             seed=utils.unique(epoch, i), device=device)
+                loss = torch.mean(loss)
+
+            elif loss_name == 'Arbitrary':
+                loss = loss_overlap(s_u=score_u, s_a=score_a, seed=utils.unique(epoch, i),
+                                    bw_u=bw_u, bw_a=bw_a, pro=False, plot=plot, device=device)
+
+            elif loss_name == 'Ranking':
+                loss = MarginRankingLoss(score_a, score_u, torch.ones_like(score_a))
+
+            elif loss_name == 'Arbitrary_Ranking':
+                loss_1 = loss_overlap(s_u=score_u, s_a=score_a, seed=utils.unique(epoch, i),
+                                    bw_u=bw_u, bw_a=bw_a, pro=False, plot=plot, device=device)
+                loss_2 = MarginRankingLoss(score_a, score_u, torch.ones_like(score_a))
+                loss = loss_1 + loss_2
+
+            elif loss_name == 'ADSD':
+                loss = loss_overlap(s_u=score_u, s_a=score_a, seed=utils.unique(epoch, i),
+                                    bw_u=bw_u, bw_a=bw_a, pro=True, plot=plot, device=device)
+
+            else:
+                raise NotImplementedError
 
             loss_batch.append(loss.item())
 

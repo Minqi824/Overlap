@@ -20,11 +20,12 @@ import torch.nn.functional as F
 # warnings.filterwarnings("ignore")
 
 from myutils import Utils
-from baseline.ADSD.model import ADSD, ADSD_AE, ADSD_AEpro, ADSD_MoE
+from baseline.ADSD.model import ADSD_MLP, ADSD_AE, ADSD_VAE
 from baseline.ADSD.fit import fit
 
 class adsd():
-    def __init__(self, seed:int, model_name='ADSD', architecture='ResNet',
+    def __init__(self, seed:int,
+                 model_name='ADSD', architecture='ResNet', loss_name='ADSD',
                  epochs:int=20, batch_size:int=256, act_fun=nn.ReLU(),
                  lr:float=1e-3, mom=0.7, weight_decay:float=1e-2,
                  bw_u:int=1.0, bw_a:int=1.0, plot=False):
@@ -53,6 +54,8 @@ class adsd():
         self.plot = plot
         # network architecture
         self.architecture = architecture
+        # loss
+        self.loss_name = loss_name
 
     def fit2test(self, data):
         # training set
@@ -81,10 +84,14 @@ class adsd():
         self.utils.set_seed(self.seed)
 
         if self.architecture == 'MLP':
-            model = ADSD(input_size=input_size, act_fun=self.act_fun)
+            model = ADSD_MLP(input_size=input_size, act_fun=self.act_fun)
 
-        elif self.architecture == 'AEpro':
-            model = ADSD_AEpro(input_size=input_size, act_fun=self.act_fun)
+        elif self.architecture == 'AE':
+            model = ADSD_AE(input_size=input_size, act_fun=self.act_fun)
+
+        elif self.architecture == 'VAE':
+            assert self.loss_name == 'Gaussian'
+            model = ADSD_VAE(input_size=input_size, act_fun=self.act_fun)
 
         elif self.architecture == 'ResNet':
             model = rtdl.ResNet.make_baseline(
@@ -105,6 +112,7 @@ class adsd():
                 d_out=1,
             )
             model.add_module('reg', nn.BatchNorm1d(num_features=1))
+
         else:
             raise NotImplementedError
 
@@ -114,7 +122,8 @@ class adsd():
             optimizer = torch.optim.SGD(model.parameters(), lr=self.lr, momentum=self.mom,
                                         weight_decay=self.weight_decay)  # optimizer
             # training
-            fit(train_loader=train_loader, model=model, architecture=self.architecture,
+            fit(train_loader=train_loader,
+                model=model, architecture=self.architecture, loss_name=self.loss_name,
                 optimizer=optimizer, epochs=self.epochs,
                 bw_u=self.bw_u, bw_a=self.bw_a,
                 device=self.device, plot=self.plot)
@@ -127,7 +136,8 @@ class adsd():
                                             weight_decay=self.weight_decay)
 
             # training
-            fit(train_loader=train_loader, model=model, architecture = self.architecture,
+            fit(train_loader=train_loader,
+                model=model, architecture=self.architecture, loss_name=self.loss_name,
                 X_val=X_val, y_val=y_val, es=True,
                 optimizer=optimizer, epochs=self.epochs,
                 bw_u=self.bw_u, bw_a=self.bw_a,
@@ -136,8 +146,10 @@ class adsd():
         #evaluating in the testing set
         model.eval()
         with torch.no_grad():
-            if self.architecture in ['MLP', 'AEpro']:
+            if self.architecture in ['MLP', 'AE']:
                 _, score_test = model(X_test_tensor.to(self.device))
+            elif self.architecture == 'VAE':
+                _, _, _, score_test = model(X_test_tensor.to(self.device))
             elif self.architecture == 'ResNet':
                 score_test = model(X_test_tensor.to(self.device)); score_test = score_test.squeeze()
             elif self.architecture == 'FTTransformer':
