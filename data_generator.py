@@ -146,7 +146,7 @@ class DataGenerator():
         return X, y
 
     def generator(self, la=None, at_least_one_labeled=False,
-                  realistic_synthetic_mode=None, alpha:int=5, percentage:float=0.1,):
+                  realistic_synthetic_mode=None, alpha:int=5, percentage:float=0.1):
         '''
         la: labeled anomalies, can be either the ratio of labeled anomalies or the number of labeled anomalies
         at_least_one_labeled: whether to guarantee at least one labeled anomalies in the training set

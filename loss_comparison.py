@@ -34,12 +34,13 @@ from data_generator import DataGenerator
 from baseline.ADSD.fit import GaussianKDE, loss_overlap
 
 class network(nn.Module):
-    def __init__(self, input_size, batchnorm=False):
+    def __init__(self, input_size, batchnorm=False, abs=False):
         '''
         input_size: the input dimension of X
         batchnorm: whether to normalizing the network output score before loss forward
         '''
         super(network, self).__init__()
+        self.abs = abs
 
         self.feature = nn.Sequential(
             nn.Linear(input_size, 20),
@@ -57,6 +58,8 @@ class network(nn.Module):
     def forward(self, X):
         feature = self.feature(X)
         score = self.reg(feature)
+        if self.abs:
+            score = torch.abs(score)
 
         return feature, score.squeeze()
 
@@ -94,7 +97,8 @@ class Comparison():
                  n_pts=1000,
                  n_dim=2,
                  n_Gaussians=2,
-                 anomaly_ratio=0.05):
+                 anomaly_ratio=0.05,
+                 la=0.05):
 
         # hyper-parameters
         self.epochs = epochs
@@ -112,6 +116,7 @@ class Comparison():
         self.n_dim = n_dim
         self.n_Gaussians = n_Gaussians
         self.anomaly_ratio = anomaly_ratio
+        self.la = la
 
     # data preprocessing step
     def data_preprocess(self, X, y):
@@ -122,6 +127,23 @@ class Comparison():
         scaler = MinMaxScaler().fit(X_train)
         X_train = scaler.transform(X_train)
         X_test = scaler.transform(X_test)
+
+        # idx of normal samples and unlabeled/labeled anomalies
+        idx_normal = np.where(y_train == 0)[0]
+        idx_anomaly = np.where(y_train == 1)[0]
+
+        assert type(self.la) == float
+        idx_labeled_anomaly = np.random.choice(idx_anomaly, int(self.la * len(idx_anomaly)), replace=False)
+
+        idx_unlabeled_anomaly = np.setdiff1d(idx_anomaly, idx_labeled_anomaly)
+        # unlabel data = normal data + unlabeled anomalies (which is considered as contamination)
+        idx_unlabeled = np.append(idx_normal, idx_unlabeled_anomaly)
+
+        del idx_anomaly, idx_unlabeled_anomaly
+
+        # the label of unlabeled data is 0, and that of labeled anomalies is 1
+        y_train[idx_unlabeled] = 0
+        y_train[idx_labeled_anomaly] = 1
 
         return {'X_train':X_train, 'X_test':X_test, 'y_train':y_train, 'y_test':y_test}
 
@@ -142,8 +164,8 @@ class Comparison():
             means = []
             covs = []
             for i in range(self.n_Gaussians):
-                a = 4 * i  # a = np.random.randint(0, 3 * n_Gaussians)
-                b = 4 * i  # b = np.random.randint(0, 3 * n_Gaussians)
+                a = 4 * (i+1)  # a = np.random.randint(0, 3 * n_Gaussians), i+1, by bug
+                b = 4 * (i+1)  # b = np.random.randint(0, 3 * n_Gaussians)
                 c = np.random.randint(0, 1000)
 
                 means.append([a, b])
@@ -171,8 +193,8 @@ class Comparison():
             means = []
             covs = []
             for i in range(self.n_Gaussians):
-                a = 4 * i # a = np.random.randint(0, 3 * n_Gaussians)
-                b = 4 * i # b = np.random.randint(0, 3 * n_Gaussians)
+                a = 4 * (i+1) # a = np.random.randint(0, 3 * n_Gaussians), i+1, by bug
+                b = 4 * (i+1) # b = np.random.randint(0, 3 * n_Gaussians)
                 c = np.random.randint(0, 1000)
                 cov = [[1, cos(c)], [cos(c), 2]]
 
@@ -251,7 +273,8 @@ class Comparison():
 
                 # loss forward
                 _, score = self.model(X)
-                loss = torch.mean(score[y == 0]) - torch.mean(score[y == 1])
+                # loss = torch.mean(score[y == 0]) - torch.mean(score[y == 1])
+                loss = torch.mean(score[y == 0]) - torch.mean(torch.max(torch.zeros_like(score[y == 1]), 2 * 5.0 - score[y == 1]))
 
                 # loss backward
                 loss.backward()
@@ -451,6 +474,9 @@ class Comparison():
             self.model = network_pair(input_size=self.input_size)
         elif loss_name == 'score_distribution_loss':
             self.model = network(input_size=self.input_size, batchnorm=True)
+        elif loss_name in ['inverse_loss', 'minus_loss']:
+            # we keep the anomaly score as positive for consistent with the original paper
+            self.model = network(input_size=self.input_size, abs=True)
         else:
             self.model = network(input_size=self.input_size)
 

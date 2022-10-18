@@ -46,9 +46,9 @@ class adsd():
         self.mom = mom
         self.weight_decay = weight_decay
 
-        self.epochs = epochs if architecture not in ['ResNet', 'FTTransformer'] else 50
-        self.bw_u = bw_u if architecture != 'FTTransformer' else 0.01
-        self.bw_a = bw_a if architecture != 'FTTransformer' else 0.01
+        self.epochs = epochs if architecture not in ['ResNet', 'FTTransformer'] else 100
+        self.bw_u = bw_u if architecture != 'FTTransformer' else 0.1
+        self.bw_a = bw_a if architecture != 'FTTransformer' else 0.1
 
         # whether to visualize the training process
         self.plot = plot
