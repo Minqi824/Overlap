@@ -60,7 +60,7 @@ class network(nn.Module):
         score = self.reg(feature)
         if self.abs:
             score = torch.abs(score)
-
+            # score = nn.ReLU()(score)
         return feature, score.squeeze()
 
 class network_pair(nn.Module):
@@ -232,8 +232,8 @@ class Comparison():
         return X, y
 
     # inverse loss
-    def fit_with_inverse_loss(self):
-        loss_epoch = []
+    def fit_with_inverse_loss(self, X_test_tensor=None, y_test=None):
+        loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
             loss_batch = []
             for data in self.train_loader:
@@ -256,13 +256,19 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_epoch.append(np.mean(loss_batch))
 
-        return loss_epoch
+        return loss_epoch, metric_epoch
 
     # minus loss
-    def fit_with_minus_loss(self):
-        loss_epoch = []
+    def fit_with_minus_loss(self, X_test_tensor=None, y_test=None):
+        loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
             loss_batch = []
             for data in self.train_loader:
@@ -274,7 +280,7 @@ class Comparison():
                 # loss forward
                 _, score = self.model(X)
                 # loss = torch.mean(score[y == 0]) - torch.mean(score[y == 1])
-                loss = torch.mean(score[y == 0]) - torch.mean(torch.max(torch.zeros_like(score[y == 1]), 2 * 5.0 - score[y == 1]))
+                loss = torch.mean(score[y == 0] + torch.max(torch.zeros_like(score[y == 1]), 5.0 - score[y == 1]))
 
                 # loss backward
                 loss.backward()
@@ -283,16 +289,22 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_epoch.append(np.mean(loss_batch))
 
-        return loss_epoch
+        return loss_epoch, metric_epoch
 
     # hinge loss
-    def fit_with_hinge_loss(self):
+    def fit_with_hinge_loss(self, X_test_tensor=None, y_test=None):
         # the ranking loss (hinge loss)
-        ranking_loss = torch.nn.MarginRankingLoss(margin=10.0)
+        ranking_loss = torch.nn.MarginRankingLoss(margin=5.0)
 
-        loss_epoch = []
+        loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
             loss_batch = []
             for data in self.train_loader:
@@ -314,13 +326,19 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_epoch.append(np.mean(loss_batch))
 
-        return loss_epoch
+        return loss_epoch, metric_epoch
 
     # deviation loss
-    def fit_with_deviation_loss(self):
-        loss_epoch = []
+    def fit_with_deviation_loss(self, X_test_tensor=None, y_test=None):
+        loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
             loss_batch = []
             for data in self.train_loader:
@@ -340,13 +358,19 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_epoch.append(np.mean(loss_batch))
 
-        return loss_epoch
+        return loss_epoch, metric_epoch
 
     # ordinal loss
-    def fit_with_ordinal_loss(self):
-        loss_epoch = []
+    def fit_with_ordinal_loss(self, X_test_tensor=None, y_test=None):
+        loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
             # generate the batch samples
             X_train_loader, y_train_loader = self.utils.sampler_pairs(self.X_train_tensor, self.y_train,
@@ -371,9 +395,14 @@ class Comparison():
                 # update model parameters
                 self.optimizer.step()
 
+            with torch.no_grad():
+                score_test = self.predict_score(self.model, self.X_train_tensor, self.y_train, X_test_tensor)
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_epoch.append(np.mean(loss_batch))
 
-        return loss_epoch
+        return loss_epoch, metric_epoch
 
     # the input of anomaly detection model trained by the ordinal loss should ba a pair
     def predict_score(self, model, X_train_tensor, y_train, X_test_tensor, num=30):
@@ -401,8 +430,8 @@ class Comparison():
         return np.array(score)
 
     # score distribution based loss
-    def fit_with_score_loss(self):
-        loss_epoch = []
+    def fit_with_score_loss(self, X_test_tensor=None, y_test=None):
+        loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
             loss_batch = []
             for i, data in enumerate(self.train_loader):
@@ -425,9 +454,15 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_epoch.append(np.mean(loss_batch))
 
-        return loss_epoch
+        return loss_epoch, metric_epoch
 
     # fitting function
     def fit2test(self, data=None, dataset=None,
@@ -452,7 +487,7 @@ class Comparison():
             generator = DataGenerator(seed=self.seed, dataset=dataset,
                                       generate_duplicates=True, n_samples_threshold=1000,
                                       show_statistic=False)
-            data = generator.generator(la=1.00, realistic_synthetic_mode=realistic_synthetic_mode)
+            data = generator.generator(la=self.la, realistic_synthetic_mode=realistic_synthetic_mode)
 
         # training set
         self.X_train, self.y_train = data['X_train'], data['y_train']
@@ -493,22 +528,22 @@ class Comparison():
 
         # fitting
         if loss_name == 'inverse_loss':
-            loss_epoch = self.fit_with_inverse_loss()
+            loss_epoch, metric_epoch = self.fit_with_inverse_loss(X_test_tensor, y_test)
 
         elif loss_name == 'minus_loss':
-            loss_epoch = self.fit_with_minus_loss()
+            loss_epoch, metric_epoch = self.fit_with_minus_loss(X_test_tensor, y_test)
 
         elif loss_name == 'hinge_loss':
-            loss_epoch = self.fit_with_hinge_loss()
+            loss_epoch, metric_epoch = self.fit_with_hinge_loss(X_test_tensor, y_test)
 
         elif loss_name == 'ordinal_loss':
-            loss_epoch = self.fit_with_ordinal_loss()
+            loss_epoch, metric_epoch = self.fit_with_ordinal_loss(X_test_tensor, y_test)
 
         elif loss_name == 'deviation_loss':
-            loss_epoch = self.fit_with_deviation_loss()
+            loss_epoch, metric_epoch = self.fit_with_deviation_loss(X_test_tensor, y_test)
 
         elif loss_name == 'score_distribution_loss':
-            loss_epoch = self.fit_with_score_loss()
+            loss_epoch, metric_epoch = self.fit_with_score_loss(X_test_tensor, y_test)
 
         else:
             print('The loss function name should be in [inverse_loss, minus_loss,'
@@ -527,8 +562,14 @@ class Comparison():
 
         performance = self.utils.metric(y_true=y_test, y_score=score_test)
 
-        return {'data': data, 'model_init': self.model_init, 'model': self.model,
-                'loss':loss_epoch, 'score': score_test, 'feature': feature, 'performance': performance}
+        return {'data': data,
+                'model_init': self.model_init,
+                'model': self.model,
+                'loss':loss_epoch,
+                'metric_epoch': metric_epoch,
+                'score': score_test,
+                'feature': feature,
+                'performance': performance}
 
 
 # # init
