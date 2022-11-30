@@ -1,1 +1,2 @@
-Official implementation of Anomaly Detection with Score Distribution Discrimination (ADSD).
+Official code and data repository of "Weakly-supervised Anomaly Detection with Adaptive Score Distribution Discrimination"
+
