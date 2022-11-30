@@ -92,7 +92,7 @@ class RunPipeline():
     def dataset_filter(self):
         # dataset list in the current folder
         dataset_list_org = [os.path.splitext(_)[0] for _ in os.listdir(os.path.join(os.getcwd(), 'datasets'))
-                            if os.path.splitext(_)[-1] != '.md']
+                            if os.path.splitext(_)[-1] == '.npz']
 
         # 将不符合标准的数据集筛除
         dataset_list = []
@@ -212,6 +212,6 @@ class RunPipeline():
                 df_time.to_csv(os.path.join(os.getcwd(), 'result', 'Time_' + self.suffix + '.csv'), index=True)
 
 # run the experment
-pipeline = RunPipeline(suffix='ADSD', parallel='proposed', architecture='VAE', loss_name='Gaussian',
+pipeline = RunPipeline(suffix='ADSD_no_ensemble', parallel='proposed', architecture='MLP', loss_name='ADSD',
                        generate_duplicates=True, n_samples_threshold=1000, realistic_synthetic_mode=None)
 pipeline.run()

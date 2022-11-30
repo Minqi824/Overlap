@@ -143,7 +143,7 @@ def loss_overlap_Gaussian(m1_tensor, m2_tensor, s1_tensor, s2_tensor,
     return area
 
 def loss_overlap(s_u, s_a, seed, bw_u=None, bw_a=None, x_num=1000,
-                 plot=False, pro=False, device=None):
+                 plot=False, pro=False, ensemble=False, device=None):
     # set seed
     utils.set_seed(seed)
 
@@ -197,14 +197,29 @@ def loss_overlap(s_u, s_a, seed, bw_u=None, bw_a=None, x_num=1000,
 
         # 修改了求trapz的bug, 之前版本算出来可能会产生negative的area问题
         if intersection_points_idx.size(0) >= 1:
-            c = x[np.random.choice(intersection_points_idx.numpy(), 1)]
+            if ensemble:
+                area = 0
+                for idx in intersection_points_idx:
+                    c = x[idx]
+                    idx_u = torch.where(x > c)[0]
+                    idx_a = torch.where(x < c)[0]
 
-            idx_u = torch.where(x > c)[0]
-            idx_a = torch.where(x < c)[0]
+                    area_u = torch.trapz(kde_u_x[idx_u], x[idx_u])
+                    area_a = torch.trapz(kde_a_x[idx_a], x[idx_a])
+                    area += (area_u + area_a)
 
-            area_u = torch.trapz(kde_u_x[idx_u], x[idx_u])
-            area_a = torch.trapz(kde_a_x[idx_a], x[idx_a])
-            area = area_u + area_a
+                area = area / intersection_points_idx.size(0)
+
+            else:
+                c = x[np.random.choice(intersection_points_idx.numpy(), 1)]
+                # print(f'Intersection point: {c}')
+
+                idx_u = torch.where(x > c)[0]
+                idx_a = torch.where(x < c)[0]
+
+                area_u = torch.trapz(kde_u_x[idx_u], x[idx_u])
+                area_a = torch.trapz(kde_a_x[idx_a], x[idx_a])
+                area = area_u + area_a
 
         else: # no intersection point
             # area = torch.tensor(10.0, requires_grad=True)

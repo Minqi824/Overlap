@@ -235,6 +235,12 @@ class Comparison():
     def fit_with_inverse_loss(self, X_test_tensor=None, y_test=None):
         loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_batch = []
             for data in self.train_loader:
                 X, y = data
@@ -256,12 +262,6 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
-            with torch.no_grad():
-                _, score_test = self.model(X_test_tensor)
-                score_test = score_test.numpy()
-                performance = self.utils.metric(y_true=y_test, y_score=score_test)
-                metric_epoch.append(performance)
-
             loss_epoch.append(np.mean(loss_batch))
 
         return loss_epoch, metric_epoch
@@ -270,6 +270,12 @@ class Comparison():
     def fit_with_minus_loss(self, X_test_tensor=None, y_test=None):
         loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_batch = []
             for data in self.train_loader:
                 X, y = data
@@ -289,12 +295,6 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
-            with torch.no_grad():
-                _, score_test = self.model(X_test_tensor)
-                score_test = score_test.numpy()
-                performance = self.utils.metric(y_true=y_test, y_score=score_test)
-                metric_epoch.append(performance)
-
             loss_epoch.append(np.mean(loss_batch))
 
         return loss_epoch, metric_epoch
@@ -306,6 +306,12 @@ class Comparison():
 
         loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_batch = []
             for data in self.train_loader:
                 X, y = data
@@ -326,12 +332,6 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
-            with torch.no_grad():
-                _, score_test = self.model(X_test_tensor)
-                score_test = score_test.numpy()
-                performance = self.utils.metric(y_true=y_test, y_score=score_test)
-                metric_epoch.append(performance)
-
             loss_epoch.append(np.mean(loss_batch))
 
         return loss_epoch, metric_epoch
@@ -340,6 +340,12 @@ class Comparison():
     def fit_with_deviation_loss(self, X_test_tensor=None, y_test=None):
         loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_batch = []
             for data in self.train_loader:
                 X, y = data
@@ -358,12 +364,6 @@ class Comparison():
                 # update
                 self.optimizer.step()
 
-            with torch.no_grad():
-                _, score_test = self.model(X_test_tensor)
-                score_test = score_test.numpy()
-                performance = self.utils.metric(y_true=y_test, y_score=score_test)
-                metric_epoch.append(performance)
-
             loss_epoch.append(np.mean(loss_batch))
 
         return loss_epoch, metric_epoch
@@ -376,6 +376,11 @@ class Comparison():
             X_train_loader, y_train_loader = self.utils.sampler_pairs(self.X_train_tensor, self.y_train,
                                              epoch=self.epochs, batch_num=20, batch_size=self.batch_size,
                                              s_a_a=8.0, s_a_u=4.0, s_u_u=0.0)
+
+            with torch.no_grad():
+                score_test = self.predict_score(self.model, self.X_train_tensor, self.y_train, X_test_tensor)
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
 
             loss_batch = []
             for i in range(len(X_train_loader)):
@@ -394,11 +399,6 @@ class Comparison():
                 loss_batch.append(loss.detach().numpy()[()])
                 # update model parameters
                 self.optimizer.step()
-
-            with torch.no_grad():
-                score_test = self.predict_score(self.model, self.X_train_tensor, self.y_train, X_test_tensor)
-                performance = self.utils.metric(y_true=y_test, y_score=score_test)
-                metric_epoch.append(performance)
 
             loss_epoch.append(np.mean(loss_batch))
 
@@ -433,6 +433,12 @@ class Comparison():
     def fit_with_score_loss(self, X_test_tensor=None, y_test=None):
         loss_epoch, metric_epoch = [], []
         for epoch in range(self.epochs):
+            with torch.no_grad():
+                _, score_test = self.model(X_test_tensor)
+                score_test = score_test.numpy()
+                performance = self.utils.metric(y_true=y_test, y_score=score_test)
+                metric_epoch.append(performance)
+
             loss_batch = []
             for i, data in enumerate(self.train_loader):
                 X, y = data
@@ -453,12 +459,6 @@ class Comparison():
                 loss_batch.append(loss.detach().item())
                 # update
                 self.optimizer.step()
-
-            with torch.no_grad():
-                _, score_test = self.model(X_test_tensor)
-                score_test = score_test.numpy()
-                performance = self.utils.metric(y_true=y_test, y_score=score_test)
-                metric_epoch.append(performance)
 
             loss_epoch.append(np.mean(loss_batch))
 
@@ -485,7 +485,9 @@ class Comparison():
         # import real-world dataset
         else:
             generator = DataGenerator(seed=self.seed, dataset=dataset,
-                                      generate_duplicates=True, n_samples_threshold=1000,
+                                      generate_duplicates=True,
+                                      n_samples_threshold=1000,
+                                      n_samples_up_threshold=1000,
                                       show_statistic=False)
             data = generator.generator(la=self.la, realistic_synthetic_mode=realistic_synthetic_mode)
 

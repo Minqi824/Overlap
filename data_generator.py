@@ -19,7 +19,8 @@ from myutils import Utils
 # currently, data generator only supports for generating the binary classification datasets
 class DataGenerator():
     def __init__(self, seed:int=42, dataset:str=None, test_size:float=0.3,
-                 generate_duplicates=False, n_samples_threshold=1000, show_statistic=False):
+                 generate_duplicates=False, n_samples_threshold=1000, n_samples_up_threshold=10000,
+                 show_statistic=False):
         '''
         Only global parameters should be provided in the DataGenerator instantiation
 
@@ -35,6 +36,7 @@ class DataGenerator():
         # 当数据量不够时, 是否生成重复样本
         self.generate_duplicates = generate_duplicates
         self.n_samples_threshold = n_samples_threshold
+        self.n_samples_up_threshold = n_samples_up_threshold
 
         # 是否展示统计结果
         self.show_statistic = show_statistic
@@ -184,10 +186,10 @@ class DataGenerator():
             y = y[idx_duplicate]
 
         # 如果数据集过大, 整体样本抽样
-        if len(y) > 10000:
+        if len(y) > self.n_samples_up_threshold:
             print(f'数据集{self.dataset}数据量过大, 正在抽样...')
             self.utils.set_seed(self.seed)
-            idx_sample = np.random.choice(np.arange(len(y)), 10000, replace=False)
+            idx_sample = np.random.choice(np.arange(len(y)), self.n_samples_up_threshold, replace=False)
             X = X[idx_sample]
             y = y[idx_sample]
 
