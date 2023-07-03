@@ -1,1 +1,1 @@
-Official code and data repository of "Weakly-supervised Anomaly Detection with Adaptive Score Distribution Discrimination".
+Official code and data repository of "Anomaly Detection with Score Distribution Discrimination", KDD' 23.
